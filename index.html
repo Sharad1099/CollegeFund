@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Money Sent Tracker</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Serif:wght@500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #F4F6F8; --panel: #FFFFFF; --ink: #1B2430; --muted: #66707C;
+    --line: #DCE1E7; --accent: #0F5C63; --accent-soft: #E3EFEF; --danger: #A33A2F;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font-family: "IBM Plex Sans", system-ui, sans-serif; font-size: 15px; }
+  .wrap { max-width: 860px; margin: 0 auto; padding: 32px 20px 60px; }
+
+  .summary {
+    background: var(--accent); color: #fff; border-radius: 14px; padding: 26px 28px;
+    display: flex; justify-content: space-between; align-items: flex-end; flex-wrap: wrap; gap: 16px;
+  }
+  .summary h1 { margin: 0 0 6px; font-size: 15px; font-weight: 500; opacity: .85; }
+  .total { font-family: "IBM Plex Serif", Georgia, serif; font-size: clamp(34px, 7vw, 52px); line-height: 1; font-variant-numeric: tabular-nums; }
+  .status { margin-top: 10px; font-size: 13px; opacity: .85; min-height: 18px; }
+  .status.err { color: #FFD2CB; opacity: 1; }
+  .actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+  button { font: inherit; font-size: 14px; border-radius: 8px; padding: 9px 14px; cursor: pointer; border: 1px solid transparent; }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+  button:focus-visible, input:focus-visible { outline: 2px solid #F2B84B; outline-offset: 2px; }
+  .btn-light { background: rgba(255,255,255,.14); color: #fff; border-color: rgba(255,255,255,.35); }
+  .btn-light:hover { background: rgba(255,255,255,.24); }
+
+  .sheet { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; margin-top: 18px; overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; min-width: 520px; }
+  th { text-align: left; font-weight: 500; color: var(--muted); font-size: 13px; padding: 12px 14px; border-bottom: 1px solid var(--line); cursor: pointer; user-select: none; }
+  th.num, td.num { text-align: right; }
+  th.no-sort { cursor: default; }
+  td { padding: 4px 8px; border-bottom: 1px solid var(--line); }
+  tr:last-child td { border-bottom: none; }
+  td input { width: 100%; font: inherit; color: var(--ink); background: transparent; border: 1px solid transparent; border-radius: 6px; padding: 8px 6px; }
+  td input:hover { border-color: var(--line); }
+  td input:focus { background: var(--accent-soft); border-color: var(--accent); outline: none; }
+  td.num input { text-align: right; font-variant-numeric: tabular-nums; }
+  .idx { width: 40px; color: var(--muted); font-size: 13px; text-align: center; }
+  .del { background: none; color: var(--muted); padding: 6px 10px; }
+  .del:hover { color: var(--danger); background: #F8ECEA; }
+
+  .add { margin-top: 12px; background: var(--ink); color: #fff; }
+  .add:hover { background: #2C3848; }
+  .empty { padding: 36px; text-align: center; color: var(--muted); }
+  .foot { margin-top: 14px; color: var(--muted); font-size: 13px; }
+  .hidden { display: none; }
+  .entry { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; margin-top: 18px; padding: 18px; display: grid; grid-template-columns: 2fr 1fr 1fr auto; gap: 12px; align-items: end; }
+  .entry label { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--muted); }
+  .entry input { font: inherit; color: var(--ink); border: 1px solid var(--line); border-radius: 8px; padding: 9px 10px; background: #fff; min-width: 0; }
+  .entry input:focus { border-color: var(--accent); outline: none; box-shadow: 0 0 0 3px var(--accent-soft); }
+  .entry .add { margin-top: 0; height: 41px; }
+  .formmsg { font-size: 13px; min-height: 18px; margin: 8px 4px 0; color: var(--accent); }
+  .formmsg.err { color: var(--danger); }
+  td.cell { padding: 12px 14px; }
+  td.cell.num { font-variant-numeric: tabular-nums; }
+  @media (max-width: 640px) { .entry { grid-template-columns: 1fr 1fr; } .entry label:first-child, .entry .add { grid-column: 1 / -1; } }
+
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <section class="summary">
+    <div>
+      <h1>Total amount sent</h1>
+      <div class="total" id="total">₹0</div>
+      <div class="status" id="status">Loading…</div>
+    </div>
+    <div class="actions">
+      <button class="btn-light" id="refreshBtn">Refresh</button>
+      <button class="btn-light" id="exportBtn">Export to CSV</button>
+    </div>
+  </section>
+
+  <form class="entry" id="entryForm" autocomplete="off">
+    <label>Name<input type="text" id="fName" maxlength="100" required placeholder="Who did you send to?"></label>
+    <label>Amount (₹)<input type="number" id="fAmount" min="0.01" step="0.01" required placeholder="0"></label>
+    <label>Date<input type="date" id="fDate" required></label>
+    <button type="submit" class="add" id="submitBtn" disabled>Submit</button>
+  </form>
+  <div class="formmsg" id="formMsg"></div>
+
+  <div class="sheet">
+    <table>
+      <thead>
+        <tr>
+          <th class="idx no-sort">#</th>
+          <th data-sort="name">Name</th>
+          <th data-sort="amount" class="num">Amount (₹)</th>
+          <th data-sort="date">Date</th>
+        </tr>
+      </thead>
+      <tbody id="rows"></tbody>
+    </table>
+    <div class="empty hidden" id="empty">No transfers yet. Add the first one above.</div>
+  </div>
+
+  <p class="foot">Entries can't be changed once submitted. For corrections, contact the owner. The list refreshes on its own every 20 seconds.</p>
+</div>
+
+<script>
+  /* ============================================
+     PASTE YOUR APPS SCRIPT WEB APP URL BELOW
+     ============================================ */
+  const API_URL = "PASTE_YOUR_WEB_APP_URL_HERE";
+
+  const fmt = new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 2 });
+  let rows = [];
+  let sortState = { key: null, asc: true };
+
+  const $ = id => document.getElementById(id);
+  const today = () => new Date().toISOString().slice(0, 10);
+  const esc = v => String(v ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+  const niceDate = d => { const t = new Date(d + "T00:00:00"); return isNaN(t) ? d : t.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }); };
+
+  function setStatus(msg, isErr) { const s = $("status"); s.textContent = msg; s.classList.toggle("err", !!isErr); }
+  function setFormMsg(msg, isErr) { const m = $("formMsg"); m.textContent = msg; m.classList.toggle("err", !!isErr); }
+
+  function applySort() {
+    const k = sortState.key;
+    if (!k) return;
+    rows.sort((a, b) => {
+      let x = a[k] ?? "", y = b[k] ?? "";
+      if (k === "amount") { x = parseFloat(x) || 0; y = parseFloat(y) || 0; }
+      else { x = String(x).toLowerCase(); y = String(y).toLowerCase(); }
+      return (x > y ? 1 : x < y ? -1 : 0) * (sortState.asc ? 1 : -1);
+    });
+  }
+
+  function render() {
+    $("rows").innerHTML = rows.map((r, i) => `
+      <tr>
+        <td class="idx">${i + 1}</td>
+        <td class="cell">${esc(r.name)}</td>
+        <td class="cell num">${r.amount === "" ? "" : fmt.format(r.amount)}</td>
+        <td class="cell">${esc(niceDate(r.date))}</td>
+      </tr>`).join("");
+    $("empty").classList.toggle("hidden", rows.length > 0);
+    const sum = rows.reduce((s, r) => s + (parseFloat(r.amount) || 0), 0);
+    $("total").textContent = fmt.format(sum);
+  }
+
+  function useRows(serverRows) { rows = serverRows; applySort(); render(); }
+
+  async function load(showMsg) {
+    if (showMsg) setStatus("Loading…");
+    try {
+      const res = await fetch(API_URL);
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.error || "Load failed");
+      useRows(data.rows);
+      setStatus("Up to date");
+      $("submitBtn").disabled = false;
+    } catch (e) {
+      setStatus("Couldn't load the list. Check your connection and click Refresh.", true);
+    }
+  }
+
+  $("entryForm").addEventListener("submit", async ev => {
+    ev.preventDefault();
+    const row = { name: $("fName").value.trim(), amount: $("fAmount").value, date: $("fDate").value };
+    if (!row.name) { setFormMsg("Please enter a name.", true); return; }
+    if (!(parseFloat(row.amount) > 0)) { setFormMsg("Amount must be more than 0.", true); return; }
+    if (!row.date) { setFormMsg("Please pick a date.", true); return; }
+
+    const btn = $("submitBtn");
+    btn.disabled = true; btn.textContent = "Submitting…"; setFormMsg("");
+    try {
+      const res = await fetch(API_URL, {
+        method: "POST",
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        body: JSON.stringify({ action: "add", row })
+      });
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.error || "Submit failed");
+      useRows(data.rows);
+      $("fName").value = ""; $("fAmount").value = ""; $("fDate").value = today();
+      setFormMsg(`Added ${row.name}, ${fmt.format(row.amount)}.`);
+      $("fName").focus();
+    } catch (e) {
+      setFormMsg("Couldn't submit: " + e.message, true);
+    } finally {
+      btn.disabled = false; btn.textContent = "Submit";
+    }
+  });
+
+  document.querySelectorAll("th[data-sort]").forEach(th => {
+    th.addEventListener("click", () => {
+      const k = th.dataset.sort;
+      sortState.asc = sortState.key === k ? !sortState.asc : true;
+      sortState.key = k;
+      applySort(); render();
+    });
+  });
+
+  $("refreshBtn").addEventListener("click", () => load(true));
+
+  function csvCell(v) { v = String(v ?? ""); return /[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v; }
+  $("exportBtn").addEventListener("click", () => {
+    const lines = ["Name,Amount,Date"];
+    rows.forEach(r => lines.push([r.name, r.amount, r.date].map(csvCell).join(",")));
+    const total = rows.reduce((s, r) => s + (parseFloat(r.amount) || 0), 0);
+    lines.push(`Total,${total},`);
+    const blob = new Blob(["\ufeff" + lines.join("\n")], { type: "text/csv;charset=utf-8" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `money-sent-${today()}.csv`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  });
+
+  $("fDate").value = today();
+  if (API_URL.startsWith("PASTE")) {
+    setStatus("Setup needed: paste your Apps Script URL into API_URL in this file.", true);
+    render();
+  } else {
+    load(true);
+    setInterval(() => load(false), 20000);
+  }
+</script>
+</body>
+</html>
